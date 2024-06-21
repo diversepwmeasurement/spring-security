@@ -1,52 +1,41 @@
-name: Merge Dependabot PR
-
-on: pull_request_target
-
-run-name: Merge Dependabot PR ${{ github.ref_name }}
-
-permissions: write-all
-
 jobs:
   merge-dependabot-pr:
-    runs-on: ubuntu-latest
     if: github.actor == 'dependabot[bot]'
+    runs-on: self-hosted
     steps:
-
-      - uses: actions/checkout@v4
-        with:
-          show-progress: false
-          ref: ${{ github.event.pull_request.head.sha }}
-
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 17
-
-      - name: Set Milestone to Dependabot Pull Request
-        id: set-milestone
-        run: |
-          if test -f pom.xml
-          then
-            CURRENT_VERSION=$(mvn help:evaluate -Dexpression="project.version" -q -DforceStdout)
-          else
-            CURRENT_VERSION=$(cat gradle.properties | sed -n '/^version=/ { s/^version=//;p }')
-          fi
-          export CANDIDATE_VERSION=${CURRENT_VERSION/-SNAPSHOT}
-          MILESTONE=$(gh api repos/$GITHUB_REPOSITORY/milestones --jq 'map(select(.due_on != null and (.title | startswith(env.CANDIDATE_VERSION)))) | .[0] | .title')
-          
-          if [ -z $MILESTONE ]
-          then
-            gh run cancel ${{ github.run_id }}
-            echo "::warning title=Cannot merge::No scheduled milestone for $CURRENT_VERSION version"
-          else
-            gh pr edit ${{ github.event.pull_request.number }} --milestone $MILESTONE
-            echo mergeEnabled=true >> $GITHUB_OUTPUT
-          fi
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Merge Dependabot pull request
-        if: steps.set-milestone.outputs.mergeEnabled
-        run: gh pr merge ${{ github.event.pull_request.number }} --auto --rebase
-        env:
-          GH_TOKEN: ${{ secrets.GH_ACTIONS_REPO_TOKEN }}
+    - continue-on-error: true
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.pull_request.head.sha }}
+        show-progress: false
+    - continue-on-error: true
+      uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: 17
+    - continue-on-error: true
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      id: set-milestone
+      name: Set Milestone to Dependabot Pull Request
+      run: "if test -f pom.xml\nthen\n  CURRENT_VERSION=$(mvn help:evaluate -Dexpression=\"\
+        project.version\" -q -DforceStdout)\nelse\n  CURRENT_VERSION=$(cat gradle.properties\
+        \ | sed -n '/^version=/ { s/^version=//;p }')\nfi\nexport CANDIDATE_VERSION=${CURRENT_VERSION/-SNAPSHOT}\n\
+        MILESTONE=$(gh api repos/$GITHUB_REPOSITORY/milestones --jq 'map(select(.due_on\
+        \ != null and (.title | startswith(env.CANDIDATE_VERSION)))) | .[0] | .title')\n\
+        \nif [ -z $MILESTONE ]\nthen\n  gh run cancel ${{ github.run_id }}\n  echo\
+        \ \"::warning title=Cannot merge::No scheduled milestone for $CURRENT_VERSION\
+        \ version\"\nelse\n  gh pr edit ${{ github.event.pull_request.number }} --milestone\
+        \ $MILESTONE\n  echo mergeEnabled=true >> $GITHUB_OUTPUT\nfi\n"
+    - continue-on-error: true
+      env:
+        GH_TOKEN: ${{ secrets.GH_ACTIONS_REPO_TOKEN }}
+      if: steps.set-milestone.outputs.mergeEnabled
+      name: Merge Dependabot pull request
+      run: gh pr merge ${{ github.event.pull_request.number }} --auto --rebase
+name: Merge Dependabot PR
+on:
+  repository_dispatch:
+    types: trigger-ga___merge-dependabot-pr.yml
+permissions: write-all
+run-name: Merge Dependabot PR ${{ github.ref_name }}
